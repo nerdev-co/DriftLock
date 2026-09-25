@@ -10,6 +10,8 @@ function json(data: unknown, status = 200): Response {
     });
 }
 
+type AIProvider = "openai" | "anthropic" | "gemini" | "cloudflare";
+
 interface WebhookConfig {
     githubToken?: string;
     repoPath?: string;
@@ -17,6 +19,8 @@ interface WebhookConfig {
     repoName?: string;
     aiProvider?: string;
     aiApiKey?: string;
+    aiModel?: string;
+    cloudflareAccountId?: string;
     forwardUrl?: string;
     confidenceThreshold?: number;
 }
@@ -63,6 +67,61 @@ function getConfigValue<T>(config: WebhookConfig, key: keyof WebhookConfig, envK
     return (process.env[envKey] as T) || fallback;
 }
 
+const AI_PROVIDERS: ReadonlySet<string> = new Set([
+    "openai",
+    "anthropic",
+    "gemini",
+    "cloudflare",
+]);
+
+function getAIConfig(config: WebhookConfig): {
+    provider: AIProvider;
+    apiKey: string;
+    accountId?: string;
+    model?: string;
+} | undefined {
+    const provider = getConfigValue(config, "aiProvider", "AI_PROVIDER", "");
+    if (!AI_PROVIDERS.has(provider)) {
+        return undefined;
+    }
+
+    const typedProvider = provider as AIProvider;
+    const apiKeyEnv =
+        typedProvider === "cloudflare"
+            ? "CLOUDFLARE_API_TOKEN"
+            : typedProvider === "gemini"
+              ? "GEMINI_API_KEY"
+              : "AI_API_KEY";
+    const apiKey = getConfigValue(config, "aiApiKey", apiKeyEnv, "");
+    const modelEnv =
+        typedProvider === "cloudflare"
+            ? "CLOUDFLARE_AI_MODEL"
+            : typedProvider === "gemini"
+              ? "GEMINI_MODEL"
+              : "AI_MODEL";
+    const model = config.aiModel || process.env[modelEnv] || "";
+    const accountId =
+        typedProvider === "cloudflare"
+            ? getConfigValue(
+                  config,
+                  "cloudflareAccountId",
+                  "CLOUDFLARE_ACCOUNT_ID",
+                  "",
+              )
+            : undefined;
+
+    if (!apiKey || (typedProvider === "cloudflare" && !accountId)) {
+        return undefined;
+    }
+
+    return {
+        provider: typedProvider,
+        apiKey,
+        accountId,
+        model: model || undefined,
+    };
+}
+
 const store = new InMemorySchemaStore();
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -107,9 +166,7 @@ function setupDetectorCallbacks(det: DriftDetector) {
         const repoOwner = getConfigValue(config, "repoOwner", "WEBHOOK_OWNER", "");
         const repoName = getConfigValue(config, "repoName", "WEBHOOK_REPO", "");
         const base = process.env.WEBHOOK_BASE || "main";
-        const aiProvider = getConfigValue(config, "aiProvider", "AI_PROVIDER", "") as "openai" | "anthropic" | "";
-        const aiApiKey = getConfigValue(config, "aiApiKey", "AI_API_KEY", "");
-        const aiModel = process.env.AI_MODEL || "";
+        const ai = getAIConfig(config);
 
         if (!githubToken || !repoPath || !repoOwner || !repoName) {
             console.log("  [SKIP] Missing GitHub config — PR not created");
@@ -124,9 +181,7 @@ function setupDetectorCallbacks(det: DriftDetector) {
                 repoPath,
                 alert,
                 token: githubToken,
-                ai: aiProvider && aiApiKey
-                    ? { provider: aiProvider, apiKey: aiApiKey, model: aiModel || undefined }
-                    : undefined,
+                ai,
             });
 
             if (result.status === "opened") {
@@ -154,9 +209,7 @@ function setupDetectorCallbacks(det: DriftDetector) {
         const repoOwner = getConfigValue(config, "repoOwner", "WEBHOOK_OWNER", "");
         const repoName = getConfigValue(config, "repoName", "WEBHOOK_REPO", "");
         const base = process.env.WEBHOOK_BASE || "main";
-        const aiProvider = getConfigValue(config, "aiProvider", "AI_PROVIDER", "") as "openai" | "anthropic" | "";
-        const aiApiKey = getConfigValue(config, "aiApiKey", "AI_API_KEY", "");
-        const aiModel = process.env.AI_MODEL || "";
+        const ai = getAIConfig(config);
 
         if (!githubToken || !repoPath || !repoOwner || !repoName) {
             console.log("  [SKIP] Missing config — rollback PR not created");
@@ -187,9 +240,7 @@ function setupDetectorCallbacks(det: DriftDetector) {
                     confidence: 100,
                 },
                 token: githubToken,
-                ai: aiProvider && aiApiKey
-                    ? { provider: aiProvider, apiKey: aiApiKey, model: aiModel || undefined }
-                    : undefined,
+                ai,
             });
 
             if (result.status === "opened") {

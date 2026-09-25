@@ -1,0 +1,18 @@
+{
+  "id": "02-high-amount-string-to-number",
+  "event": "charge.succeeded",
+  "kind": "type_changed",
+  "expected": "HIGH",
+  "before": {
+    "id": "ch_123",
+    "object": "charge",
+    "amount": "2000"
+  },
+  "after": {
+    "id": "ch_123",
+    "object": "charge",
+    "amount": 2000
+  },
+  "codeRef": "src/payments/charge.ts:42 Number(amount)",
+  "fix": "coerce amount: string -> number via Number(amount) — verify 3 tests pass"
+}

@@ -184,6 +184,7 @@ export async function handleGitHubRepos(req: Request): Promise<Response> {
             owner: { login: string };
             private: boolean;
             default_branch: string;
+            description: string | null;
         }>;
 
         // Fetch repos from user's orgs
@@ -209,6 +210,7 @@ export async function handleGitHubRepos(req: Request): Promise<Response> {
                     owner: r.owner.login,
                     private: r.private,
                     defaultBranch: r.default_branch,
+                    description: r.description,
                 })),
                 ...orgRepos.map((r) => ({
                     id: r.id,
@@ -217,6 +219,7 @@ export async function handleGitHubRepos(req: Request): Promise<Response> {
                     owner: r.owner.login,
                     private: r.private,
                     defaultBranch: r.default_branch,
+                    description: r.description,
                 })),
             ],
             user: {
@@ -245,8 +248,9 @@ export function handleInstallUrl(req: Request): Response {
     if (repos) {
         params.set("repositories", repos);
     }
-    // state carries where to redirect after install
-    params.set("state", encodeURIComponent(returnTo));
+    // state carries where to redirect after install — now points to our success page
+    const successPath = "/install/success";
+    params.set("state", encodeURIComponent(returnTo === "/" ? successPath : returnTo));
 
     const queryString = params.toString();
     if (queryString) {

@@ -1,6 +1,7 @@
 import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import AppShell from "./routes/__root";
-import AccountsPage from "./routes/index";
+import LandingPage from "./routes/index";
+import AccountsPage from "./routes/accounts";
 import AccountPage from "./routes/account";
 import RepoPage from "./routes/repo";
 import SettingsPage from "./routes/settings";
@@ -8,12 +9,20 @@ import WebhookDashboard from "./routes/webhooks";
 import LoginPage from "./routes/login";
 import AuthCallbackPage from "./routes/auth-callback";
 import InstallPage from "./routes/install";
+import InstallSuccessPage from "./routes/install-success";
+import AboutPage from "./routes/about";
 
 const rootRoute = createRootRoute({ component: AppShell });
 
 const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/",
+    component: () => <LandingPage />,
+});
+
+const accountsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/accounts",
     component: () => <AccountsPage />,
 });
 
@@ -65,8 +74,21 @@ const installRoute = createRoute({
     component: InstallPage,
 });
 
+const installSuccessRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/install/success",
+    component: InstallSuccessPage,
+});
+
+const aboutRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/about",
+    component: AboutPage,
+});
+
 const routeTree = rootRoute.addChildren([
     indexRoute,
+    accountsRoute,
     accountRoute,
     repoRoute,
     settingsRoute,
@@ -74,6 +96,8 @@ const routeTree = rootRoute.addChildren([
     loginRoute,
     authCallbackRoute,
     installRoute,
+    installSuccessRoute,
+    aboutRoute,
 ]);
 
 export const router = createRouter({ routeTree });

@@ -25,4 +25,6 @@ export {
     createWebhookFixPR,
     type WebhookPRInput,
     type WebhookPRResult,
+    isValidAIFix,
 } from "./prCreator";
+export { harToConsumerContract, type HarCaptureOptions, type HarEntry } from "./harCapture";

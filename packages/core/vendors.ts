@@ -38,6 +38,18 @@ export interface VendorConfig {
     clientNames: string[];
     /** URL path prefix shared by every endpoint, e.g. "/v1". */
     basePath: string;
+    /**
+     * What a captured contract describes.
+     *
+     * `resources` (the default) means the contract describes the fields of the
+     * objects the vendor *returns*, so `stripe.paymentIntents` is the SDK's own
+     * request surface and is not covered by it. Only values derived from a call,
+     * like `paymentIntent`, are checked.
+     *
+     * `client` means the contract describes the instance itself, as for a
+     * browser library where the object handed to the sketch *is* the API surface.
+     */
+    contractSubject?: "resources" | "client";
     /** Optional per-resource enrichments. */
     resources?: Record<string, ResourceConfig>;
     /** Links to source documentation / OpenAPI spec. */
@@ -51,7 +63,7 @@ export const STRIPE_VENDOR: VendorConfig = {
     basePath: "/v1",
     docs: {
         url: "https://docs.stripe.com/api",
-        specUrl: "https://api.stripe.com/openapi/openapi.json",
+        specUrl: "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
     },
     resources: {
         // Custom invoice actions whose endpoints can't be inferred from the
@@ -74,5 +86,26 @@ export const TWILIO_VENDOR: VendorConfig = {
     basePath: "/2010-04-01",
     docs: {
         url: "https://www.twilio.com/docs",
+    },
+};
+
+export const P5_VENDOR: VendorConfig = {
+    name: "p5",
+    sdk: "p5",
+    clientNames: ["p", "p5", "sketch"],
+    basePath: "",
+    contractSubject: "client",
+    docs: {
+        url: "https://p5js.org/reference/",
+        specUrl: "https://p5js.org/reference/data.json",
+    },
+    resources: {
+        // p5 2.x renames / behavior changes are instance-scoped (p.*), not REST
+        sketch: {
+            overrides: {
+                keyIsPressed: "p5:instance:keyIsPressed",
+                keyIsDown: "p5:instance:keyIsDown",
+            },
+        },
     },
 };

@@ -25,12 +25,63 @@ export class ApiError extends Error {
     }
 }
 
+const READ_METHODS = new Set(["GET", "HEAD"]);
+
+/**
+ * Whether a request may fall back to a fabricated empty payload. Absent a
+ * method this is a read, which is what every `get*` helper relies on.
+ */
+function isRead(init?: RequestInit): boolean {
+    const method = init?.method?.toUpperCase();
+    return method === undefined || READ_METHODS.has(method);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-    const res = await fetch(`${BASE}${path}`, {
-        headers: { "content-type": "application/json" },
-        ...init,
-    });
+    let res: Response;
+    try {
+        res = await fetch(`${BASE}${path}`, {
+            headers: { "content-type": "application/json" },
+            ...init,
+        });
+    } catch (err) {
+        // Network failure. The demo fallbacks below are for reads only: a
+        // failed write must never look like it succeeded, or the UI reports a
+        // saved setting that was never persisted.
+        if (!isRead(init)) {
+            throw new ApiError(0, err instanceof Error ? err.message : "Network error");
+        }
+        // Backend offline in demo mode. Empty payloads for non-mutating reads.
+        if (path === "/api/accounts") return { accounts: [] } as unknown as T;
+        if (path === "/api/me") throw new ApiError(0, "Backend offline");
+        if (path.startsWith("/api/webhooks")) {
+            if (path.includes("/drifts")) return { drifts: [] } as unknown as T;
+            if (path.includes("/endpoints")) return { endpoints: [] } as unknown as T;
+            if (path.includes("/schemas")) return { schemas: [] } as unknown as T;
+        }
+        if (path.startsWith("/api/settings")) throw new ApiError(0, "Backend offline");
+        if (path.startsWith("/api/accounts")) return { repos: [] } as unknown as T;
+        if (path.startsWith("/api/repos")) {
+            if (path.endsWith("/drifts")) return { drifts: [] } as unknown as T;
+            if (path.endsWith("/callsites")) return { callsites: [] } as unknown as T;
+            if (path.endsWith("/pulls")) return { pulls: [] } as unknown as T;
+            return { repo: null, callsites: [], pulls: [] } as unknown as T;
+        }
+        throw new ApiError(0, err instanceof Error ? err.message : "Network error");
+    }
     if (!res.ok) {
+        // 502/503 from proxy when backend not running. Reads get the same demo
+        // treatment as a network failure; a write gets the real error, so a
+        // failed save surfaces as failed rather than silently succeeding.
+        const offline = res.status === 502 || res.status === 503 || res.status === 504;
+        if (offline && isRead(init) && path.startsWith("/api/")) {
+            if (path === "/api/accounts") return { accounts: [] } as unknown as T;
+            if (path === "/api/me") throw new ApiError(0, "Backend offline");
+            if (path.startsWith("/api/webhooks")) {
+                if (path.includes("/drifts")) return { drifts: [] } as unknown as T;
+                if (path.includes("/endpoints")) return { endpoints: [] } as unknown as T;
+                if (path.includes("/schemas")) return { schemas: [] } as unknown as T;
+            }
+        }
         const body = await res.json().catch(() => null);
         throw new ApiError(
             res.status,
@@ -108,7 +159,7 @@ export function updateRepoPolicy(
     );
 }
 
-export function rotateApiKey(name: string): Promise<{ key: ApiKey }> {
+export function rotateApiKey(name: string): Promise<{ key: ApiKey & { raw: string } }> {
     return request(`/api/settings/rotate?name=${encodeURIComponent(name)}`, {
         method: "POST",
     });

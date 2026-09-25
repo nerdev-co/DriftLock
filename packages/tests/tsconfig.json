@@ -2,8 +2,9 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "."
+    "rootDir": "../../",
+    "allowImportingTsExtensions": false
   },
   "include": ["**/*.ts"],
-  "exclude": ["fixtures/**", "e2e/web/**", "node_modules"]
+  "exclude": ["fixtures/**", "e2e/web/**", "e2e/webhookWedgeHarness.test.ts", "node_modules"]
 }

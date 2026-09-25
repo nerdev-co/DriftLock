@@ -6,9 +6,12 @@ export function EmptyState({
     hint?: string;
 }) {
     return (
-        <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed border-neutral-300 bg-white px-6 py-10 text-center">
-            <p className="text-sm font-medium text-neutral-700">{title}</p>
-            {hint && <p className="text-xs text-neutral-500">{hint}</p>}
+        <div className="flex flex-col items-center gap-1.5 rounded-[10px] border border-dashed border-[var(--color-line)] bg-[var(--color-surface)]/60 px-6 py-10 text-center">
+            <div className="mb-1 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-surface)] border border-[var(--color-line)] text-[var(--color-muted)]">
+                <span className="text-sm">◯</span>
+            </div>
+            <p className="text-[13px] font-medium text-[var(--color-ink)]">{title}</p>
+            {hint && <p className="max-w-sm text-xs leading-4 text-[var(--color-muted)]">{hint}</p>}
         </div>
     );
 }

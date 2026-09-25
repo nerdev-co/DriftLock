@@ -1,5 +1,6 @@
+import { createHash } from "crypto";
 import { readFileSync } from "fs";
-import { join } from "path";
+import { join, relative } from "path";
 import {
     analyzeAndCompare,
     applyDriftFix,
@@ -54,6 +55,14 @@ export async function handleRun(req: Request): Promise<Response> {
     });
 
     const clone = await cloneRepo(owner, name, base);
+    const toDbId = (id: string) => {
+        if (id.length <= 64) return id;
+        // Keep temporary checkout paths out of persistent identities.
+        const stableId = id.startsWith(`${clone.path}/`)
+            ? `${repository.id}:${id.slice(clone.path.length + 1)}`
+            : id;
+        return createHash("sha256").update(stableId, "utf8").digest("hex");
+    };
     try {
         const snapshotStore = new DbSnapshotStore(store);
         const result = await analyzeAndCompare({
@@ -65,9 +74,13 @@ export async function handleRun(req: Request): Promise<Response> {
 
         for (const callSite of result.callSites) {
             const shapes = result.shapes.get(callSite.id);
+            const relPath = callSite.filePath.startsWith(clone.path)
+                ? relative(clone.path, callSite.filePath)
+                : callSite.filePath;
+            const dbId = toDbId(callSite.id);
             await store.upsertCallSite(repository.id, {
-                id: callSite.id,
-                filePath: callSite.filePath,
+                id: dbId,
+                filePath: relPath,
                 line: callSite.line,
                 method: callSite.method,
                 endpoint: callSite.endpoint ?? null,
@@ -79,7 +92,7 @@ export async function handleRun(req: Request): Promise<Response> {
         }
         await store.deleteObsoleteCallSites(
             repository.id,
-            result.callSites.map((site) => site.id),
+            result.callSites.map((site) => toDbId(site.id)),
         );
 
         const meta = {
@@ -94,18 +107,23 @@ export async function handleRun(req: Request): Promise<Response> {
             if (!current) {
                 continue;
             }
-            const previous = await store.getLatestSnapshot(drift.callSite.id);
+            const dbCallSiteId = toDbId(drift.callSite.id);
+            const previous = await store.getLatestSnapshot(dbCallSiteId);
             const saved = await store.saveSnapshot({
-                callSiteId: drift.callSite.id,
+                callSiteId: dbCallSiteId,
                 ...meta,
                 requestShape: current.request,
                 responseShape: current.response,
             });
             const source = readSource(clone.path, drift.callSite.filePath);
             const applied = source ? applyDriftFix(drift, source) : null;
+            const driftId = `drift-${dbCallSiteId}`.slice(0, 128);
+            if (applied) {
+                applied.fix.driftEventId = driftId;
+            }
             await store.recordDrift({
-                id: `drift-${drift.callSite.id}`,
-                callSiteId: drift.callSite.id,
+                id: driftId,
+                callSiteId: dbCallSiteId,
                 oldSnapshotId: previous?.id ?? saved.id,
                 newSnapshotId: saved.id,
                 diffSummary: driftSummary(drift) as unknown as Record<
@@ -117,7 +135,7 @@ export async function handleRun(req: Request): Promise<Response> {
                 prNumber: null,
                 status: "detected",
             });
-            await store.setCallSiteSnapshotState(drift.callSite.id, "drifted");
+            await store.setCallSiteSnapshotState(dbCallSiteId, "drifted");
             driftCount += 1;
         }
 
@@ -158,7 +176,8 @@ export async function handleRun(req: Request): Promise<Response> {
 
 function readSource(repoPath: string, filePath: string): string | null {
     try {
-        return readFileSync(join(repoPath, filePath), "utf8");
+        const full = filePath.startsWith("/") ? filePath : join(repoPath, filePath);
+        return readFileSync(full, "utf8");
     } catch {
         return null;
     }

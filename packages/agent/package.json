@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@driftlock/core": "workspace:*",
+    "@driftlock/git": "workspace:*",
+    "@driftlock/sandbox": "workspace:*",
     "openai": "^4.73.0"
   },
   "devDependencies": {

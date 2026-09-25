@@ -1,0 +1,22 @@
+{
+  "id": "01-high-source-to-paymentMethod",
+  "event": "payment_intent.succeeded",
+  "kind": "field_renamed",
+  "expected": "HIGH",
+  "before": {
+    "id": "pi_123",
+    "object": "payment_intent",
+    "amount": 2000,
+    "currency": "usd",
+    "source": "src_123"
+  },
+  "after": {
+    "id": "pi_123",
+    "object": "payment_intent",
+    "amount": 2000,
+    "currency": "usd",
+    "payment_method": "pm_456"
+  },
+  "codeRef": "src/webhook.js:19 paymentIntent.source",
+  "fix": "paymentIntent.source -> paymentIntent.payment_method (same string id, verify tests pass)"
+}

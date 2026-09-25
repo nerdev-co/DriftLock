@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "driftlock",
+      "dependencies": {
+        "@nerdev/skillset": "^0.2.3",
+      },
       "devDependencies": {
         "@types/inquirer": "^9.0.10",
         "@typescript-eslint/eslint-plugin": "^7.18.0",
@@ -38,12 +41,14 @@
       },
       "dependencies": {
         "@driftlock/agent": "workspace:*",
+        "@driftlock/aiFix": "workspace:*",
         "@driftlock/core": "workspace:*",
         "@driftlock/diff": "workspace:*",
         "@driftlock/git": "workspace:*",
         "@driftlock/parser": "workspace:*",
         "@driftlock/pipeline": "workspace:*",
         "@driftlock/sandbox": "workspace:*",
+        "@driftlock/webhookCapture": "workspace:*",
         "chalk": "^5.3.0",
         "commander": "^12.0.0",
         "inquirer": "^9.2.0",
@@ -94,6 +99,8 @@
       "version": "0.1.0",
       "dependencies": {
         "@driftlock/core": "workspace:*",
+        "@driftlock/git": "workspace:*",
+        "@driftlock/sandbox": "workspace:*",
         "openai": "^4.73.0",
       },
       "devDependencies": {
@@ -258,6 +265,7 @@
         "@driftlock/git": "workspace:*",
         "@driftlock/parser": "workspace:*",
         "@driftlock/sandbox": "workspace:*",
+        "@driftlock/webhookCapture": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -422,6 +430,8 @@
     "@kwsites/file-exists": ["@kwsites/file-exists@1.1.1", "", { "dependencies": { "debug": "^4.1.1" } }, "sha512-m9/5YGR18lIwxSFDwfE3oA7bWuq9kdau6ugN4H2rJeyhFQZcG9AgSHkQtSD15a8WvTgfz9aikZMrKPHvbpqFiw=="],
 
     "@kwsites/promise-deferred": ["@kwsites/promise-deferred@1.1.1", "", {}, "sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw=="],
+
+    "@nerdev/skillset": ["@nerdev/skillset@0.2.3", "", { "bin": { "skillset": "bin/skillset.mjs" } }, "sha512-cuaA9kPmaqgxxGv4W5+vKIf7oR3MAMd5ENeFvYMDTeTWMfTI72ryWmEy7Rm2Ke1iwbe+KXNmNcDGjj4Iky795Q=="],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 

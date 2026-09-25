@@ -1,0 +1,17 @@
+{
+  "id": "05-low-trialEnd-removed",
+  "event": "subscription.updated",
+  "kind": "field_removed",
+  "expected": "LOW",
+  "before": {
+    "id": "sub_123",
+    "object": "subscription",
+    "trial_end": 1715616000
+  },
+  "after": {
+    "id": "sub_123",
+    "object": "subscription"
+  },
+  "codeRef": "src/billing/subscription.ts:22 trial_end @ 7 locations",
+  "fix": "explain-only: trial_end removed with no replacement, flag 7 locations"
+}

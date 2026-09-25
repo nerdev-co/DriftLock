@@ -29,11 +29,17 @@ import {
     handleInstallUrl,
     handleLogout,
 } from "./routes/auth";
+import { handleGitHubSetup } from "./routes/githubSetup";
+import { handleInstallationsSync } from "./routes/installations";
 
 // Auth routes don't require bearer token
 const AUTH_ROUTES = new Set([
     "/api/auth/github",
     "/api/auth/github/callback",
+    // GitHub redirects the browser here after an App install, so there is no
+    // bearer token to present.
+    "/api/github/setup",
+    "/api/github/setup/callback",
 ]);
 
 async function dispatch(req: Request, url: URL): Promise<Response> {
@@ -57,6 +63,15 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
     }
     if (url.pathname === "/api/auth/install") {
         return handleInstallUrl(req);
+    }
+    if (url.pathname === "/api/github/setup") {
+        return handleGitHubSetup(req);
+    }
+    if (url.pathname === "/api/github/setup/callback") {
+        return handleGitHubSetup(req);
+    }
+    if (url.pathname === "/api/installations/sync" && req.method === "POST") {
+        return handleInstallationsSync(req);
     }
     if (url.pathname === "/api/me") {
         return handleMe(req);

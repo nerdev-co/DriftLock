@@ -15,6 +15,17 @@ export interface SandboxConfig {
      * forwarded) unless listed here.
      */
     safety?: ProxySafetyConfig;
+    /**
+     * Mount the workspace read-only. Defaults to true. Callers that need a
+     * build to write output (dist, .next, caches) must opt out, and should
+     * point the mount at a disposable copy rather than a real checkout.
+     */
+    readOnly?: boolean;
+    /**
+     * Extra bind mounts, host path to container path. Use for read-only
+     * mounts such as a shared node_modules.
+     */
+    extraBinds?: string[];
 }
 
 export interface SandboxResult {
@@ -38,6 +49,61 @@ export interface TrafficCapture {
     };
     /** True when the proxy blocked the request instead of forwarding it. */
     intercepted?: boolean;
+}
+
+/**
+ * Docker multiplexes stdout and stderr over one stream as 8-byte frames:
+ * [streamType, 0, 0, 0, size(BE32)] then payload. streamType 1 is stdout,
+ * 2 is stderr. Without splitting the frames the caller gets binary framing
+ * garbage in the middle of the build output and an always-empty stderr.
+ * Anything that does not parse as a frame is passed through as stdout, so a
+ * TTY-attached stream still yields its text.
+ */
+export function demuxDockerStream(buffer: Buffer): {
+    stdout: string;
+    stderr: string;
+} {
+    let stdout = "";
+    let stderr = "";
+    let offset = 0;
+
+    const emit = (streamType: number, payload: Buffer) => {
+        if (streamType === 2) stderr += payload.toString("utf8");
+        else stdout += payload.toString("utf8");
+    };
+
+    while (offset < buffer.length) {
+        const remaining = buffer.length - offset;
+        if (remaining < 8) {
+            stdout += buffer.subarray(offset).toString("utf8");
+            break;
+        }
+
+        const streamType = buffer[offset];
+        const size = buffer.readUInt32BE(offset + 4);
+        const structural =
+            (streamType === 0 || streamType === 1 || streamType === 2) &&
+            buffer[offset + 1] === 0 &&
+            buffer[offset + 2] === 0 &&
+            buffer[offset + 3] === 0 &&
+            size > 0;
+
+        if (!structural) {
+            stdout += buffer.subarray(offset).toString("utf8");
+            break;
+        }
+
+        const available = remaining - 8;
+        if (size > available) {
+            emit(streamType, buffer.subarray(offset + 8));
+            break;
+        }
+
+        emit(streamType, buffer.subarray(offset + 8, offset + 8 + size));
+        offset += 8 + size;
+    }
+
+    return { stdout, stderr };
 }
 
 export class SandboxRunner {
@@ -76,13 +142,18 @@ export class SandboxRunner {
             }
 
             // Create container
+            const readOnly = config.readOnly ?? true;
+            const binds = [
+                `${repoPath}:/workspace${readOnly ? ":ro" : ""}`,
+                ...(config.extraBinds ?? []),
+            ];
             container = await this.docker.createContainer({
                 Image: config.image,
                 Cmd: config.command,
                 WorkingDir: "/workspace",
                 Env: env,
                 HostConfig: {
-                    Binds: [`${repoPath}:/workspace:ro`],
+                    Binds: binds,
                     Memory: this.parseMemoryLimit(config.memoryLimit),
                     NanoCpus: config.cpuLimit * 1e9,
                     NetworkMode: config.networkEnabled ? "bridge" : "none",
@@ -158,21 +229,23 @@ export class SandboxRunner {
             stderr: true,
         });
 
-        let stdout = "";
-        let stderr = "";
+        const chunks: Buffer[] = [];
 
         return new Promise((resolve) => {
             stream.on("data", (chunk: Buffer) => {
-                const output = chunk.toString();
-                stdout += output;
+                chunks.push(Buffer.from(chunk));
             });
 
-            stream.on("error", (error: Error) => {
-                stderr += error.message;
+            stream.on("error", () => {
+                // Resolved from the inspect below; a mid-stream attach error
+                // should not hang the run.
             });
 
             stream.on("end", async () => {
                 const info = await container.inspect();
+                const { stdout, stderr } = demuxDockerStream(
+                    Buffer.concat(chunks),
+                );
                 resolve({
                     exitCode: info.State.ExitCode,
                     stdout,

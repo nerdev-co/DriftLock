@@ -1,5 +1,6 @@
-import type { SpecDiffSummary } from "@driftlock/diff/spec";
+import type { SpecChange, SpecDiffSummary } from "@driftlock/diff/spec";
 import type { VerdictReceipt } from "@driftlock/diff/receipts";
+import { toPerChangeReviews, renderPerChangeComment } from "./perChangeReview";
 
 export type GovernanceVerdict = "ALLOW" | "WARN" | "REQUIRE_APPROVAL" | "BLOCK";
 
@@ -21,13 +22,21 @@ export function decideVerdict(s: SpecDiffSummary, violations: string[]): Governa
 
 export function buildPrComment(r: GovernanceReport): string {
   const emoji = r.verdict === "BLOCK" ? "🛑" : r.verdict === "WARN" ? "⚠️" : "✅";
+  const perChange = r.summary.changes.length > 1
+    ? renderPerChangeComment(
+        toPerChangeReviews(
+          r.summary.changes as SpecChange[],
+          r.summary.changes.map((_, i) => `${r.receipt.changeIRHash}-${i}`),
+        ),
+      )
+    : "";
   return [
     `## ${emoji} DriftLock Governance — ${r.verdict}`,
     ``,
     `**Risk ${r.summary.riskScore.overall}/100** (revenue:${r.summary.riskScore.dimensions.revenue} blast:${r.summary.riskScore.dimensions.blast_radius} compat:${r.summary.riskScore.dimensions.app_compatibility} sec:${r.summary.riskScore.dimensions.security}) → \`${r.summary.riskScore.recommendation}\``,
     ``,
     r.summary.breakingChanges.length ? `**Breaking (${r.summary.breakingChanges.length})**\n${r.summary.breakingChanges.map((c) => `- ${c}`).join("\n")}` : `No breaking changes.`,
-    ``,
+    perChange ? `\n${perChange}\n` : "",
     r.policyViolations.length ? `**Policy violations**\n${r.policyViolations.map((v) => `- ${v}`).join("\n")}` : ``,
     ``,
     `**Changelog** — Breaking: ${r.changelog.breaking.length}, Added: ${r.changelog.added.length}, Changed: ${r.changelog.changed.length}`,

@@ -1,0 +1,18 @@
+{
+  "id": "04-low-customer-string-to-object",
+  "event": "invoice.payment_succeeded",
+  "kind": "type_changed",
+  "expected": "LOW",
+  "before": {
+    "id": "in_123",
+    "object": "invoice",
+    "customer": "cus_123"
+  },
+  "after": {
+    "id": "in_123",
+    "object": "invoice",
+    "customer": { "id": "cus_123", "email": "a@example.com" }
+  },
+  "codeRef": "src/billing/invoice.ts:14 invoice.customer (string)",
+  "fix": "explain-only: string id -> object, unsafe auto-patch, human review required"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "03-medium-email-nullable",
+  "event": "customer.created",
+  "kind": "became_optional",
+  "expected": "MEDIUM",
+  "before": {
+    "id": "cus_123",
+    "object": "customer",
+    "email": "a@example.com"
+  },
+  "after": {
+    "id": "cus_123",
+    "object": "customer",
+    "email": null
+  },
+  "codeRef": "src/customer/get.ts:27 customer.email",
+  "fix": "review-required: email string -> string | null, add null check email ?? 'unknown'"
+}

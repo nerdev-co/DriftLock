@@ -4,15 +4,15 @@ export type ButtonVariant = "primary" | "secondary" | "ghost";
 export type ButtonSize = "sm" | "md";
 
 const VARIANTS: Record<ButtonVariant, string> = {
-    primary: "bg-neutral-900 text-white hover:bg-neutral-700 active:bg-neutral-800",
+    primary: "bg-[#0a0a0f] text-[var(--color-paper)] hover:bg-zinc-800 active:scale-[0.98] shadow-[0_1px_2px_rgba(0,0,0,0.12)]",
     secondary:
-        "border border-neutral-300 bg-white text-neutral-800 hover:bg-neutral-100 active:bg-neutral-200",
-    ghost: "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100",
+        "border border-[var(--color-line)] bg-[var(--color-surface)] text-zinc-800 hover:bg-[var(--color-surface)] active:scale-[0.98]",
+    ghost: "text-[var(--color-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface)] active:scale-[0.98]",
 };
 
 const SIZES: Record<ButtonSize, string> = {
     sm: "text-xs px-2.5 py-1.5",
-    md: "text-sm px-3.5 py-2",
+    md: "text-[13px] px-3.5 py-2",
 };
 
 export function Button({
@@ -28,7 +28,7 @@ export function Button({
     return (
         <button
             type="button"
-            className={`inline-flex items-center gap-1.5 rounded-md font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-[8px] font-medium transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
             {...props}
         />
     );

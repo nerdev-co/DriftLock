@@ -1,4 +1,5 @@
-import { mock } from "bun:test";
+import { expect, mock } from "bun:test";
+import { createHash } from "crypto";
 
 const mockStore = {
     ensureRepository: mock(async () => ({ id: "repo-1", owner: "acme", name: "payments" })),
@@ -173,6 +174,55 @@ async function run() {
     await handleRun(makeRequest({ owner: "  acme  ", repo: "  payments  " }));
     out("trim-owner", mockStore.ensureRepository.mock.calls[mockStore.ensureRepository.mock.calls.length - 1][0].owner);
     out("trim-repo", mockStore.ensureRepository.mock.calls[mockStore.ensureRepository.mock.calls.length - 1][0].name);
+
+    // Long IDs sharing a suffix must stay distinct throughout persistence.
+    const suffix = `${"nested/".repeat(12)}handler.ts:12:fetch`;
+    const callSites = ["first", "second"].map((prefix) => ({
+        ...mockAnalyzeResult.callSites[0],
+        id: `${mockClone.path}/${prefix}/${suffix}`,
+        filePath: import.meta.path,
+    }));
+    const shapes = mockAnalyzeResult.shapes.get("cs-1")!;
+    const { applyDriftFix } = await import("@driftlock/pipeline");
+    const fixMock = applyDriftFix as ReturnType<typeof mock>;
+    const appliedFix = { fix: { driftEventId: `drift-${callSites[0].id}` }, changes: "changed" };
+    fixMock.mockReturnValueOnce(appliedFix);
+    (analyzeAndCompare as ReturnType<typeof mock>).mockResolvedValueOnce({
+        ...mockAnalyzeResult,
+        callSites,
+        shapes: new Map(callSites.map((site) => [site.id, shapes])),
+        drifts: [{ callSite: callSites[0] }],
+    });
+    mockStore.upsertCallSite.mockClear();
+    mockStore.recordDrift.mockClear();
+    const response = await handleRun(makeRequest({ owner: "acme", repo: "payments" }));
+    expect(response.status).toBe(200);
+    const ids = mockStore.upsertCallSite.mock.calls.map((call) => call[1].id);
+    expect(ids).toEqual(callSites.map((site) => createHash("sha256").update(`repo-1:${site.id.slice(mockClone.path.length + 1)}`, "utf8").digest("hex")));
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(ids.every((id) => id.length === 64)).toBe(true);
+    expect(mockStore.deleteObsoleteCallSites.mock.calls.at(-1)![1]).toEqual(ids);
+    expect(mockStore.getLatestSnapshot.mock.calls.at(-1)![0]).toBe(ids[0]);
+    expect(mockStore.saveSnapshot.mock.calls.at(-1)![0].callSiteId).toBe(ids[0]);
+    const event = mockStore.recordDrift.mock.calls[0][0];
+    expect(event.id).toBe(`drift-${ids[0]}`);
+    expect(event.suggestedFix.driftEventId).toBe(event.id);
+
+    const previousClonePath = mockClone.path;
+    mockClone.path = "/tmp/driftlock-another-checkout";
+    const nextCallSites = callSites.map((site) => ({
+        ...site,
+        id: site.id.replace(previousClonePath, mockClone.path),
+    }));
+    (analyzeAndCompare as ReturnType<typeof mock>).mockResolvedValueOnce({
+        ...mockAnalyzeResult,
+        callSites: nextCallSites,
+        shapes: new Map(nextCallSites.map((site) => [site.id, shapes])),
+    });
+    mockStore.upsertCallSite.mockClear();
+    expect((await handleRun(makeRequest({ owner: "acme", repo: "payments" }))).status).toBe(200);
+    expect(mockStore.upsertCallSite.mock.calls.map((call) => call[1].id)).toEqual(ids);
+    expect(mockStore.deleteObsoleteCallSites.mock.calls.at(-1)![1]).toEqual(ids);
 }
 
 run().catch((e) => {

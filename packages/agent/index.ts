@@ -3,6 +3,15 @@ import { DiffSummary, Fix, DriftEvent, VendorConfig } from "@driftlock/core";
 import { validateVendorConfig } from "./docsToConfig";
 
 export * from "./docsToConfig";
+export * from "./tools";
+export * from "./state";
+export * from "./prompt";
+export * from "./executor";
+export * from "./vendorContract";
+export * from "./repoFacts";
+export * from "./commandRunner";
+export * from "./publisher";
+export * from "./migrationAgent";
 
 export interface VendorConfigHints {
     /** Canonical vendor name, e.g. "stripe". */

@@ -1,6 +1,14 @@
 import { describe, expect, test, mock } from "bun:test";
-import { SandboxRunner } from "@driftlock/sandbox";
+import { SandboxRunner, demuxDockerStream } from "@driftlock/sandbox";
 import type { SandboxConfig } from "@driftlock/sandbox";
+
+function frame(streamType: 1 | 2, payload: string): Buffer {
+    const body = Buffer.from(payload, "utf8");
+    const header = Buffer.alloc(8);
+    header.writeUInt8(streamType, 0);
+    header.writeUInt32BE(body.length, 4);
+    return Buffer.concat([header, body]);
+}
 
 function createConfig(overrides: Partial<SandboxConfig> = {}): SandboxConfig {
     return {
@@ -60,6 +68,64 @@ describe("SandboxRunner", () => {
     });
 });
 
+describe("demuxDockerStream", () => {
+    test("splits stdout and stderr frames", () => {
+        const buffer = Buffer.concat([
+            frame(1, "out-1\n"),
+            frame(2, "err-1\n"),
+            frame(1, "out-2\n"),
+            frame(2, "err-2\n"),
+        ]);
+        expect(demuxDockerStream(buffer)).toEqual({
+            stdout: "out-1\nout-2\n",
+            stderr: "err-1\nerr-2\n",
+        });
+    });
+
+    test("handles a stdout-only stream", () => {
+        expect(demuxDockerStream(Buffer.concat([frame(1, "only\n")]))).toEqual({
+            stdout: "only\n",
+            stderr: "",
+        });
+    });
+
+    test("handles a stderr-only stream", () => {
+        expect(demuxDockerStream(frame(2, "bad\n"))).toEqual({
+            stdout: "",
+            stderr: "bad\n",
+        });
+    });
+
+    test("passes an unframed TTY stream through as stdout", () => {
+        const raw = Buffer.from("no framing here\n", "utf8");
+        expect(demuxDockerStream(raw)).toEqual({
+            stdout: "no framing here\n",
+            stderr: "",
+        });
+    });
+
+    test("returns empty strings for an empty buffer", () => {
+        expect(demuxDockerStream(Buffer.alloc(0))).toEqual({
+            stdout: "",
+            stderr: "",
+        });
+    });
+
+    test("keeps multi-byte characters intact", () => {
+        const result = demuxDockerStream(frame(1, "café ✅\n"));
+        expect(result.stdout).toBe("café ✅\n");
+    });
+
+    test("strips the header from a trailing partial frame", () => {
+        const complete = frame(1, "kept\n");
+        const truncated = complete.subarray(0, complete.length - 2);
+        expect(demuxDockerStream(truncated)).toEqual({
+            stdout: "kep",
+            stderr: "",
+        });
+    });
+});
+
 describe("SandboxConfig", () => {
     test("config accepts all required fields", () => {
         const config = createConfig();
@@ -89,5 +155,55 @@ describe("SandboxConfig", () => {
             allowedEndpoints: ["api.stripe.com:443"],
         });
         expect(config.allowedEndpoints).toEqual(["api.stripe.com:443"]);
+    });
+
+    test("mounts read-only by default", async () => {
+        const runner = new SandboxRunner();
+        const createContainer = mock(async () => {
+            throw new Error("stop");
+        });
+        const docker = {
+            getImage: mock((_image: string) => ({ inspect: mock(async () => ({})) })),
+            createContainer,
+        };
+        (runner as unknown as { docker: typeof docker }).docker = docker;
+
+        await runner.runTestSuite("/tmp", createConfig());
+
+        expect(createContainer).toHaveBeenCalledWith(
+            expect.objectContaining({
+                HostConfig: expect.objectContaining({
+                    Binds: ["/tmp:/workspace:ro"],
+                }),
+            }),
+        );
+    });
+
+    test("mounts writable and adds extra binds when asked", async () => {
+        const runner = new SandboxRunner();
+        const createContainer = mock(async () => {
+            throw new Error("stop");
+        });
+        const docker = {
+            getImage: mock((_image: string) => ({ inspect: mock(async () => ({})) })),
+            createContainer,
+        };
+        (runner as unknown as { docker: typeof docker }).docker = docker;
+
+        await runner.runTestSuite(
+            "/tmp/work",
+            createConfig({ readOnly: false, extraBinds: ["/tmp/nm:/workspace/node_modules:ro"] }),
+        );
+
+        expect(createContainer).toHaveBeenCalledWith(
+            expect.objectContaining({
+                HostConfig: expect.objectContaining({
+                    Binds: [
+                        "/tmp/work:/workspace",
+                        "/tmp/nm:/workspace/node_modules:ro",
+                    ],
+                }),
+            }),
+        );
     });
 });
